@@ -16,7 +16,7 @@ ALL_DIR = os.path.join(STATIC_DIR, "all")
 RESULT_DIR = os.path.join(STATIC_DIR, "results")
 os.makedirs(RESULT_DIR, exist_ok=True)
 
-OCR_CSV = os.path.join(BASE_DIR, "OCR_lang.csv")
+OCR_CSV = os.path.join(BASE_DIR, "./models/OCR_lang.csv")
 MODEL_PATH = os.path.join(BASE_DIR, "./models/cnn_4class_conditional.pt")
 YOLO_PATH = os.path.join(BASE_DIR, "./models.yolov8m.pt")
 
