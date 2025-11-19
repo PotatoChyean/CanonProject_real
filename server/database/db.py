@@ -19,7 +19,7 @@ POOL_NAME = "analysis_pool"
 
 # 환경 변수에서 DB 정보 가져오기
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST') or "localhost",
+    'host': os.getenv('DB_HOST') or "127.0.0.1",
     'user': os.getenv('DB_USER') or "root",
     'password': os.getenv('DB_PASSWORD') or "Jangchaeyean2023!", # 사용자님의 비밀번호
     'database': os.getenv('DB_NAME') or "testdb",
