@@ -1,207 +1,211 @@
-import os, time, cv2, torch, easyocr
+"""
+FastAPI 백엔드 서버
+YOLO + OCR 모델을 사용한 이미지 분석 API (완성본)
+"""
+
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from typing import List, Optional
+import uvicorn
+from datetime import datetime
 import numpy as np
-import pandas as pd
 from PIL import Image
-from flask import Flask, render_template, request, send_from_directory
-from torchvision import transforms
-from ultralytics import YOLO
-import torch.nn as nn
-from torch.nn import functional as F
+import io
+import os
+import traceback # 디버깅을 위해 추가
 
-# -----------------------------------------------------
-# 경로 설정
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-ALL_DIR = os.path.join(STATIC_DIR, "all")
-RESULT_DIR = os.path.join(STATIC_DIR, "results")
-os.makedirs(RESULT_DIR, exist_ok=True)
+# --- 1. 통합된 모델 및 DB 모듈 임포트 ---
+# 모델 초기화 및 분석 로직 (models/inference.py 파일)
+from models.inference import analyze_image, analyze_frame, initialize_models
+# DB 저장 및 조회 로직 (database/db.py 파일 - MySQL 버전으로 대체될 예정)
+from database.db import save_result, get_statistics, get_results 
 
-OCR_CSV = os.path.join(BASE_DIR, "./models/OCR_lang.csv")
-MODEL_PATH = os.path.join(BASE_DIR, "./models/cnn_4class_conditional.pt")
-YOLO_PATH = os.path.join(BASE_DIR, "./models.yolov8m.pt")
 
-DEVICE = "cpu"
+# --- 2. FastAPI 앱 초기화 및 설정 ---
+app = FastAPI(title="Cannon Project API", version="1.0.0")
 
-# -----------------------------------------------------
-# OCR reader (단일 인스턴스, 모든 언어 지원)
-readers = {
-    "ko": easyocr.Reader(['ko'], gpu=False),
-    "en": easyocr.Reader(['en'], gpu=False),
-    "ja": easyocr.Reader(['ja'], gpu=False),
-    "ch_sim": easyocr.Reader(['ch_sim', 'en'], gpu=False),
-    "ch_tra": easyocr.Reader(['ch_tra', 'en'], gpu=False)
-}
+# CORS 설정 (Next.js 프론트엔드와 통신)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Next.js 개발 서버
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-OCR_TABLE = pd.read_csv(OCR_CSV)
 
-# -----------------------------------------------------
-# YOLO 모델
-yolo_model = YOLO(YOLO_PATH)
-CLASS_NAMES = ['Btn_Home', 'Btn_Back', 'Btn_ID', 'Btn_Stat', 'Monitor_Small', 'Monitor_Big', 'sticker']
-
-# -----------------------------------------------------
-# CNN 모델 정의
-class ConditionalEfficientNet(nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-        from torchvision import models
-        self.backbone = models.efficientnet_b0(weights=None)
-        old_conv = self.backbone.features[0][0]
-        new_conv = nn.Conv2d(1, old_conv.out_channels,
-                             kernel_size=old_conv.kernel_size,
-                             stride=old_conv.stride,
-                             padding=old_conv.padding,
-                             bias=old_conv.bias is not None)
-        with torch.no_grad():
-            new_conv.weight[:] = old_conv.weight.mean(dim=1, keepdim=True)
-        self.backbone.features[0][0] = new_conv
-        in_features = self.backbone.classifier[1].in_features
-        self.backbone.classifier = nn.Identity()
-        self.embed = nn.Linear(num_classes, in_features)
-        self.head = nn.Sequential(nn.Dropout(0.3), nn.Linear(in_features, 1))
-
-    def forward(self, x, cond):
-        feat = self.backbone(x)
-        cond_embed = self.embed(cond)
-        fused = feat + cond_embed
-        out = self.head(fused)
-        return torch.sigmoid(out), feat
-
-cnn_model = ConditionalEfficientNet(num_classes=4).to(DEVICE)
-cnn_model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-cnn_model.eval()
-
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5])
-])
-
-# -----------------------------------------------------
-# OCR 언어 탐지
-def detect_language(img):
-    img_np = np.array(img)
-    for lang, reader in readers.items():
-        results = reader.readtext(img_np, detail=1, text_threshold=0.4, low_text=0.3, contrast_ths=0.05)
-        if not results:
-            continue
-        recognized = " ".join([r[1] for r in results])
-        subset = OCR_TABLE[OCR_TABLE['lang'] == lang]
-        matched = subset[subset['term'].apply(lambda t: t in recognized)]
-        if matched.empty:
-            continue
-
-        # group 판정
-        has_group0 = all(subset[subset['group'] == 0]['term'].apply(lambda t: t in recognized))
-        xor_terms = subset[subset['group'] == 1]['term'].tolist()
-        has_xor = any(t in recognized for t in xor_terms)
-        xor_multi = sum(t in recognized for t in xor_terms) > 1
-        if has_group0 and has_xor and not xor_multi:
-            return lang, "Pass", results
-        else:
-            return lang, "Fail", results
-    return "Nonlingual", "Pass", []
-
-# -----------------------------------------------------
-# Flask app
-app = Flask(__name__, static_folder=STATIC_DIR)
-
-@app.route('/')
-def index():
-    imgs = sorted([f for f in os.listdir(ALL_DIR) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-    idx = int(request.args.get('idx', 0) or 0)
-    if not imgs:
-        return "no images found"
-
-    img_name = imgs[idx % len(imgs)]
-    img_path = os.path.join(ALL_DIR, img_name)
-    pil_img = Image.open(img_path).convert("L")
-    start = time.time()
-
-    # 1. OCR
-    lang, ocr_status, ocr_boxes = detect_language(pil_img)
-
-    # 2. YOLO
-    results = yolo_model.predict(source=img_path, conf=0.5, imgsz=800, device=DEVICE, verbose=False)
-    r = results[0]
-    boxes = r.boxes.xyxy.cpu().numpy().astype(int)
-    cls_ids = r.boxes.cls.cpu().numpy().astype(int)
-    detected = [CLASS_NAMES[c] for c in cls_ids]
-
-    # 3. CNN (ROI 예측 + 시각화)
-    conds = ['Btn_Back', 'Btn_Home', 'Btn_ID', 'Btn_Stat']
-    roi_pass = []
-    img_cv = cv2.cvtColor(np.array(pil_img), cv2.COLOR_GRAY2BGR)
-
-    for (x1, y1, x2, y2), cls_id in zip(boxes, cls_ids):
-        cls_name = CLASS_NAMES[cls_id]
-        if cls_name not in conds:
-            continue
-        crop = pil_img.crop((x1, y1, x2, y2))
-        x = transform(crop).unsqueeze(0).to(DEVICE)
-        cond_onehot = torch.zeros(len(conds)).to(DEVICE)
-        cond_onehot[conds.index(cls_name)] = 1
-        pred, _ = cnn_model(x, cond_onehot.unsqueeze(0))
-        prob = pred.item()
-        roi_pass.append(prob >= 0.5)
-        color = (0, 255, 0) if prob >= 0.5 else (0, 0, 255)
-        cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, 2)
-        cv2.putText(img_cv, f"{cls_name}:{prob:.2f}", (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
-
-    # 4. OCR 박스 시각화
-    for (bbox, text, conf) in ocr_boxes:
-        pts = np.array(bbox).astype(int)
-        cv2.polylines(img_cv, [pts], True, (255, 255, 0), 1)
-        cv2.putText(img_cv, text, (pts[0][0], pts[0][1] - 3),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1, cv2.LINE_AA)
-
-    # 5. 개별 판정
-    yolo_ok = ('Btn_Home' in detected and 'Btn_Stat' in detected) and \
-              (('Btn_Back' in detected) ^ ('Btn_ID' in detected)) and \
-              (('Monitor_Small' in detected) or ('Monitor_Big' in detected))
-    cnn_ok = all(roi_pass) if roi_pass else False
-    overall = "Pass" if (ocr_status == "Pass" and yolo_ok and cnn_ok) else "Fail"
-
-    elapsed = (time.time() - start) * 1000
-    fps = 1000.0 / elapsed if elapsed > 0 else 0
-
-    # 6. 결과 이미지에 텍스트 요약 추가
-    cv2.putText(img_cv, f"OCR:{lang}({ocr_status}) YOLO:{'Pass' if yolo_ok else 'Fail'} CNN:{'Pass' if cnn_ok else 'Fail'}",
-                (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(img_cv, f"FINAL: {overall} | Time: {elapsed:.1f} ms ({fps:.1f} FPS)",
-                (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
-
-    # 7. 저장
-    result_path = os.path.join(RESULT_DIR, img_name)
-    cv2.imwrite(result_path, img_cv)
-
-    # 8. 템플릿 반환
-    result = {
-        "ocr_status": ocr_status,
-        "ocr_lang": lang,
-        "yolo_status": "Pass" if yolo_ok else "Fail",
-        "cnn_status": "Pass" if cnn_ok else "Fail",
-        "final_status": overall,
-        "time_ms": f"{elapsed:.1f}",
-        "fps": f"{fps:.1f}"
-    }
-
-    prev_idx = (idx - 1) % len(imgs)
-    next_idx = (idx + 1) % len(imgs)
-
-    return render_template(
-        "index.html",
-        img_name=img_name,
-        idx=idx,
-        total=len(imgs),
-        result=result
+# --- 3. 모델 초기화 이벤트 (서버 시작 시 1회 실행) ---
+@app.on_event("startup")
+async def startup_event():
+    """서버 시작 시 모델 로드 및 DB 연결 준비"""
+    print("모델 초기화 및 DB 연결 준비 중...")
+    
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    
+    # 모델 경로 설정
+    yolo_path = os.path.join(BASE_DIR, "models", "yolov8m.pt")
+    cnn_path = os.path.join(BASE_DIR, "models", "cnn_4class_conditional.pt")
+    ocr_csv_path = os.path.join(BASE_DIR, "models", "OCR_lang.csv")
+    
+    # 모델 초기화 (models/inference.py의 함수 호출)
+    initialize_models(
+        yolo_path=yolo_path,
+        cnn_path=cnn_path,
+        ocr_csv_path=ocr_csv_path
     )
+    print("모델 초기화 완료")
+    
+    # DB 초기화 (MySQL 테이블 생성 등)
+    try:
+        from database.db import init_db 
+        init_db() 
+        print("DB 초기화 완료")
+    except ImportError:
+        # init_db 함수가 정의되지 않았을 경우 (DB 모듈이 아직 불완전할 경우)
+        print("경고: database/db.py에 init_db 함수를 찾을 수 없습니다. 수동으로 DB 초기화 필요.")
+    except Exception as e:
+        print(f"DB 초기화 중 오류 발생: {e}")
 
 
-@app.route('/static/<path:path>')
-def send_static(path):
-    return send_from_directory(STATIC_DIR, path)
+# --- 4. API 엔드포인트 정의 ---
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.post("/api/analyze-image")
+async def analyze_image_endpoint(file: UploadFile = File(...)):
+    """단일 이미지 파일을 분석하여 Pass/Fail 결과 반환"""
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        image_array = np.array(image)
+        
+        result = analyze_image(image_array)
+        
+        saved_result = save_result(
+            filename=file.filename,
+            status=result["status"],
+            reason=result.get("reason"),
+            confidence=result.get("confidence", 0),
+            details=result.get("details", {})
+        )
+        
+        return JSONResponse(content={
+            "id": saved_result["id"],
+            "filename": file.filename,
+            "status": result["status"],
+            "reason": result.get("reason"),
+            "confidence": result.get("confidence", 0),
+            "details": result.get("details", {}),
+            "timestamp": saved_result["timestamp"]
+        })
+    
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")
+
+
+@app.post("/api/analyze-batch")
+async def analyze_batch_endpoint(files: List[UploadFile] = File(...)):
+    """여러 이미지 파일을 일괄 분석"""
+    results = []
+    
+    for file in files:
+        try:
+            contents = await file.read()
+            image = Image.open(io.BytesIO(contents))
+            image_array = np.array(image)
+            
+            result = analyze_image(image_array)
+            
+            saved_result = save_result(
+                filename=file.filename,
+                status=result["status"],
+                reason=result.get("reason"),
+                confidence=result.get("confidence", 0),
+                details=result.get("details", {})
+            )
+            
+            results.append({
+                "id": saved_result["id"],
+                "filename": file.filename,
+                "status": result["status"],
+                "reason": result.get("reason"),
+                "confidence": result.get("confidence", 0),
+                "details": result.get("details", {}),
+                "timestamp": saved_result["timestamp"]
+            })
+        
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "status": "ERROR",
+                "reason": f"처리 실패: {str(e)}",
+                "confidence": 0
+            })
+    
+    return JSONResponse(content={"results": results})
+
+
+@app.post("/api/analyze-frame")
+async def analyze_frame_endpoint(file: UploadFile = File(...)):
+    """실시간 카메라 프레임 분석"""
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        image_array = np.array(image)
+        
+        # analyze_frame은 모델 추론 로직을 사용하지만 DB 저장은 하지 않음 (실시간 처리)
+        result = analyze_frame(image_array)
+        
+        return JSONResponse(content={
+            "status": result["status"],
+            "reason": result.get("reason"),
+            "confidence": result.get("confidence", 0),
+            "details": result.get("details", {})
+        })
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"프레임 분석 중 오류 발생: {str(e)}")
+
+
+@app.get("/api/statistics")
+async def get_statistics_endpoint(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """분석 결과 통계 조회 (DB read)"""
+    try:
+        # database/db.py의 get_statistics 호출
+        stats = get_statistics(start_date, end_date)
+        return JSONResponse(content=stats)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"통계 조회 중 오류 발생: {str(e)}")
+
+
+@app.get("/api/results")
+async def get_results_endpoint(
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """분석 결과 목록 조회 (DB read)"""
+    try:
+        # database/db.py의 get_results 호출
+        results = get_results(status=status, limit=limit, offset=offset)
+        return JSONResponse(content={"results": results})
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"결과 조회 중 오류 발생: {str(e)}")
+
+
+@app.get("/health")
+async def health_check():
+    """서버 상태 확인"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+# --- 5. 서버 실행 ---
+if __name__ == "__main__":
+    # 포트를 5000번으로 변경
+    print("FastAPI 서버 시작: http://localhost:5000")
+    uvicorn.run(app, host="0.0.0.0", port=5000)
