@@ -1,8 +1,9 @@
 "use client"
 
-import type React from "react"
 import { useState } from "react"
-import { Upload, File as FileIcon } from "lucide-react"
+import { Upload, File as FileIcon } from "lucide-react" 
+import type React from "react"
+import { File } from "lucide-react" // File 아이콘을 위한 기본 임포트 유지 (FileIcon과 구분)
 
 // 1. 상태 타입 정의 (Preview URL과 원본 File 객체를 저장)
 type UploadedFileItem = {
@@ -25,6 +26,7 @@ export function ImageUpload({ setIsProcessing, setResults }: any) {
         }));
     };
     
+    // Drag/Drop 핸들러
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault()
         setIsDragging(true)
@@ -52,59 +54,56 @@ export function ImageUpload({ setIsProcessing, setResults }: any) {
         }
     }
 
-  const handleStartAnalysis = async () => {
-    if (files.length === 0) return
+    const handleStartAnalysis = async () => {
+        if (files.length === 0) return
 
-    setIsProcessing(true)
+        setIsProcessing(true)
 
-    try {
-      const formData = new FormData()
+        try {
+            const formData = new FormData()
+            
+            // 5. FormData 수정: item.file 속성에 있는 원본 File 객체만 전달
+            files.forEach((item) => { 
+                formData.append("files", item.file as Blob) // item.file 사용
+            })
 
-      // FormData에 원본 File 객체(item.file)만 전달하는 로직 (타입스크립트 오류 방지)
-      files.forEach((item) => {
-        formData.append("files", item.file as Blob)
-      })
+            // FastAPI 백엔드 호출 (포트 5000)
+            const response = await fetch("http://localhost:5000/api/analyze-batch", {
+                method: "POST",
+                body: formData,
+            })
 
-      // FastAPI 백엔드 호출 (포트 5000)
-      const response = await fetch("http://localhost:5000/api/analyze-batch", {
-        method: "POST",
-        body: formData,
-      })
+            if (!response.ok) {
+                throw new Error(`API 오류: ${response.statusText}`)
+            }
 
-      if (!response.ok) {
-        throw new Error(`API 오류: ${response.statusText}`)
-      }
+            const data = await response.json()
+            
+            // 🚨 최종 결과 매핑: Preview URL 추가
+            const results = data.results.map((result: any, index: number) => {
+                const fileItem = files.find(item => item.name === result.filename); 
+                
+                return {
+                    id: result.id || index,
+                    name: result.filename,
+                    status: result.status,
+                    reason: result.reason || null,
+                    confidence: result.confidence || 0,
+                    timestamp: result.timestamp,
+                    details: result.details || {},
+                    previewUrl: fileItem ? fileItem.previewUrl : null, // Preview URL 추가
+                };
+            });
 
-      const data = await response.json()
-
-      // 🚨 [핵심 수정]: API 응답과 원본 files 상태를 합쳐 previewUrl을 추가합니다.
-      const results = data.results.map((result: any, index: number) => {
-        // 원본 files 상태에서 현재 결과의 파일 이름과 일치하는 항목을 찾습니다.
-        const fileItem = files.find(item => item.name === result.filename);
-
-        return {
-          id: result.id || index,
-          name: result.filename,
-          status: result.status,
-          reason: result.reason || null,
-          confidence: result.confidence || 0,
-          timestamp: result.timestamp,
-          details: result.details || {},
-
-          // 🖼️ Preview URL 추가: 이 정보가 ResultsGrid로 전달됩니다.
-          previewUrl: fileItem ? fileItem.previewUrl : null,
-        };
-      });
-      console.log("Final Processed Results:", results);
-      setResults(results)
-
-    } catch (error) {
-      console.error("분석 중 오류 발생:", error)
-      alert("분석 중 오류가 발생했습니다. 백엔드 서버가 실행 중인지 확인하세요.")
-    } finally {
-      setIsProcessing(false)
+            // console.log("Final Processed Results:", results); // 디버그 로그 제거
+            setResults(results)
+        } catch (error) {
+            console.error("분석 중 오류 발생:", error)
+            alert("분석 중 오류가 발생했습니다. 백엔드 서버가 실행 중인지 확인하세요.")
+        } finally {
+            setIsProcessing(false)
+        }
     }
-  }
 
     const handleRemoveFile = (index: number) => {
         // 6. Preview 메모리 해제: URL.revokeObjectURL 호출
@@ -118,7 +117,7 @@ export function ImageUpload({ setIsProcessing, setResults }: any) {
     // 7. Preview 이미지 렌더링
     return (
         <div className="space-y-6 max-w-4xl">
-            {/* Drag and Drop Zone (변경 없음) */}
+            {/* Drag and Drop Zone */}
             <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -162,6 +161,7 @@ export function ImageUpload({ setIsProcessing, setResults }: any) {
                                             className="w-8 h-8 object-cover rounded" 
                                         />
                                     ) : (
+                                        // Preview가 없을 때만 FileIcon 사용
                                         <FileIcon className="w-4 h-4 text-blue-400" />
                                     )}
                                     <span className="text-sm text-slate-300">{item.name}</span>

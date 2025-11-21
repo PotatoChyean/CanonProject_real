@@ -9,12 +9,12 @@ from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
 import uvicorn
 from datetime import datetime
-import numpy as np # NumPy 타입 처리를 위해 필요
+import numpy as np
 from PIL import Image
 import io
 import os
 import traceback
-from fastapi.encoders import jsonable_encoder # 🚨 [추가]: jsonable_encoder 임포트
+from fastapi.encoders import jsonable_encoder # jsonable_encoder 임포트
 
 # --- 1. 통합된 모델 및 DB 모듈 임포트 ---
 from models.inference import analyze_image, analyze_frame, initialize_models
@@ -90,7 +90,7 @@ async def analyze_image_endpoint(file: UploadFile = File(...)):
             details=result.get("details", {})
         )
         
-        # 🚨 [수정]: jsonable_encoder 적용
+        # 🚨 jsonable_encoder 적용
         return JSONResponse(content=jsonable_encoder({
             "id": saved_result["id"],
             "filename": file.filename,
@@ -119,33 +119,40 @@ async def analyze_batch_endpoint(files: List[UploadFile] = File(...)):
             
             result = analyze_image(image_array)
             
+            # save_result 호출 시 NumPy 오류 방지를 위해 jsonable_encoder로 한 번 필터링 (안전 강화)
+            clean_result = jsonable_encoder(result) 
+            
             saved_result = save_result(
                 filename=file.filename,
-                status=result["status"],
-                reason=result.get("reason"),
-                confidence=result.get("confidence", 0),
-                details=result.get("details", {})
+                status=clean_result["status"],
+                reason=clean_result.get("reason"),
+                confidence=clean_result.get("confidence", 0),
+                details=clean_result.get("details", {})
             )
             
             results.append({
                 "id": saved_result["id"],
                 "filename": file.filename,
-                "status": result["status"],
-                "reason": result.get("reason"),
-                "confidence": result.get("confidence", 0),
-                "details": result.get("details", {}),
+                "status": clean_result["status"],
+                "reason": clean_result.get("reason"),
+                "confidence": clean_result.get("confidence", 0),
+                "details": clean_result.get("details", {}),
                 "timestamp": saved_result["timestamp"]
             })
         
         except Exception as e:
+            # 🚨 [최종 수정]: 오류 메시지 때문에 JSON 충돌이 재발하는 것을 막기 위해 repr(e) 사용
+            error_details = repr(e) 
+            
             results.append({
                 "filename": file.filename,
                 "status": "ERROR",
-                "reason": f"처리 실패: {str(e)}",
+                # 안전한 문자열 포맷 사용
+                "reason": f"처리 실패: {error_details}", 
                 "confidence": 0
             })
     
-    # 🚨 [수정]: jsonable_encoder 적용
+    # 🚨 jsonable_encoder 적용
     return JSONResponse(content={"results": jsonable_encoder(results)})
 
 
@@ -159,7 +166,7 @@ async def analyze_frame_endpoint(file: UploadFile = File(...)):
         
         result = analyze_frame(image_array)
         
-        # 🚨 [수정]: jsonable_encoder 적용
+        # 🚨 jsonable_encoder 적용
         return JSONResponse(content=jsonable_encoder({
             "status": result["status"],
             "reason": result.get("reason"),
@@ -168,7 +175,9 @@ async def analyze_frame_endpoint(file: UploadFile = File(...)):
         }))
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"프레임 분석 중 오류 발생: {str(e)}")
+        # 오류 발생 시에도 안전한 JSON을 반환하도록 jsonable_encoder 적용
+        error_details = repr(e)
+        raise HTTPException(status_code=500, detail=jsonable_encoder(f"분석 중 오류 발생: {error_details}"))
 
 
 @app.get("/api/statistics")
@@ -179,7 +188,7 @@ async def get_statistics_endpoint(
     """분석 결과 통계 조회 (DB read)"""
     try:
         stats = get_statistics(start_date, end_date)
-        # 🚨 [수정]: jsonable_encoder 적용
+        # 🚨 jsonable_encoder 적용
         return JSONResponse(content=jsonable_encoder(stats))
     except Exception as e:
         traceback.print_exc()
@@ -195,7 +204,7 @@ async def get_results_endpoint(
     """분석 결과 목록 조회 (DB read)"""
     try:
         results = get_results(status=status, limit=limit, offset=offset)
-        # 🚨 [수정]: jsonable_encoder 적용
+        # 🚨 jsonable_encoder 적용
         return JSONResponse(content={"results": jsonable_encoder(results)})
     except Exception as e:
         traceback.print_exc()
