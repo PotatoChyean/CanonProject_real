@@ -1,59 +1,48 @@
 """
 FastAPI 백엔드 서버
-YOLO + OCR 모델을 사용한 이미지 분석 API (완성본)
+YOLO + OCR 모델을 사용한 이미지 분석 API
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from typing import List, Optional, Dict, Any
+from fastapi.responses import JSONResponse, StreamingResponse
+from typing import List, Optional
 import uvicorn
 from datetime import datetime
 import numpy as np
 from PIL import Image
 import io
-import os
-import traceback
-from fastapi.encoders import jsonable_encoder # jsonable_encoder 임포트
+import csv
 
-# --- 1. 통합된 모델 및 DB 모듈 임포트 ---
 from models.inference import analyze_image, analyze_frame, initialize_models
-from database.db import save_result, get_statistics, get_results 
+import os
+from database.db import save_result, get_statistics, get_results
 
+import os
+# PyTorch DLL 경로 (사용자님 경로에 맞게 수정 필요)
+torch_dll_path = r"C:\Users\user\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\torch\lib"
 
-# --- 2. FastAPI 앱 초기화 및 설정 ---
 app = FastAPI(title="Cannon Project API", version="1.0.0")
 
-
-# 이 코드가 어떤 경로로 들어오는 NumPy 타입이든 자동으로 Python int/float으로 변환합니다.
-app.json_encoders = {
-    np.int_: int, np.intc: int, np.intp: int, np.int8: int, np.int16: int, 
-    np.int32: int, np.int64: int, np.uint8: int, np.uint16: int, 
-    np.uint32: int, np.uint64: int, np.float32: float, np.float64: float, 
-    np.generic: float, # 모든 NumPy 타입을 float으로 처리
-}
-
-# CORS 설정 (Next.js 프론트엔드와 통신)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# --- 3. 모델 초기화 이벤트 (서버 시작 시 1회 실행) ---
+# 서버 시작 시 모델 초기화
 @app.on_event("startup")
 async def startup_event():
-    """서버 시작 시 모델 로드 및 DB 연결 준비"""
-    print("모델 초기화 및 DB 연결 준비 중...")
-    
+    """서버 시작 시 모델 로드"""
+    print("모델 초기화 중...")
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     
+    # 모델 경로 설정 (Flask 코드와 동일한 구조)
     yolo_path = os.path.join(BASE_DIR, "models", "yolov8m.pt")
     cnn_path = os.path.join(BASE_DIR, "models", "cnn_4class_conditional.pt")
     ocr_csv_path = os.path.join(BASE_DIR, "models", "OCR_lang.csv")
+    
+    # 경로가 없으면 상대 경로로 시도
+    if not os.path.exists(yolo_path):
+        yolo_path = "models/yolov8m.pt"
+    if not os.path.exists(cnn_path):
+        cnn_path = "models/cnn_4class_conditional.pt"
+    if not os.path.exists(ocr_csv_path):
+        ocr_csv_path = "models/OCR_lang.csv"
     
     initialize_models(
         yolo_path=yolo_path,
@@ -61,27 +50,42 @@ async def startup_event():
         ocr_csv_path=ocr_csv_path
     )
     print("모델 초기화 완료")
-    
-    try:
-        from database.db import init_db 
-        init_db() 
-        print("DB 초기화 완료")
-    except Exception as e:
-        print(f"DB 초기화 중 오류 발생: {e}")
 
+# CORS 설정 (Next.js 프론트엔드와 통신)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Next.js 개발 서버
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# --- 4. API 엔드포인트 정의 ---
 
 @app.post("/api/analyze-image")
 async def analyze_image_endpoint(file: UploadFile = File(...)):
-    """단일 이미지 파일을 분석하여 Pass/Fail 결과 반환"""
+    """
+    이미지 파일을 분석하여 Pass/Fail 결과 반환
+    """
     try:
+        # 이미지 파일 읽기
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
+        if not contents:
+            raise HTTPException(status_code=400, detail="빈 파일입니다.")
+        
+        try:
+            image = Image.open(io.BytesIO(contents))
+            # 이미지를 RGB로 변환 (RGBA나 다른 형식 대응)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"이미지 파일 형식 오류: {str(e)}")
+        
         image_array = np.array(image)
         
-        result = analyze_image(image_array) 
-
+        # 모델 추론 실행
+        result = analyze_image(image_array)
+        
+        # 결과 저장
         saved_result = save_result(
             filename=file.filename,
             status=result["status"],
@@ -90,8 +94,7 @@ async def analyze_image_endpoint(file: UploadFile = File(...)):
             details=result.get("details", {})
         )
         
-        # 🚨 jsonable_encoder 적용
-        return JSONResponse(content=jsonable_encoder({
+        return JSONResponse(content={
             "id": saved_result["id"],
             "filename": file.filename,
             "status": result["status"],
@@ -99,85 +102,171 @@ async def analyze_image_endpoint(file: UploadFile = File(...)):
             "confidence": result.get("confidence", 0),
             "details": result.get("details", {}),
             "timestamp": saved_result["timestamp"]
-        }))
+        })
     
+    except HTTPException:
+        raise
     except Exception as e:
-        traceback.print_exc()
+        import traceback
+        error_detail = f"분석 중 오류 발생: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # 서버 로그에 출력
         raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")
 
 
 @app.post("/api/analyze-batch")
 async def analyze_batch_endpoint(files: List[UploadFile] = File(...)):
-    """여러 이미지 파일을 일괄 분석"""
+    """
+    여러 이미지 파일을 일괄 분석
+    """
     results = []
     
     for file in files:
         try:
             contents = await file.read()
-            image = Image.open(io.BytesIO(contents))
+            if not contents:
+                results.append({
+                    "filename": file.filename,
+                    "status": "ERROR",
+                    "reason": "빈 파일입니다.",
+                    "confidence": 0
+                })
+                continue
+            
+            try:
+                image = Image.open(io.BytesIO(contents))
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+            except Exception as e:
+                results.append({
+                    "filename": file.filename,
+                    "status": "ERROR",
+                    "reason": f"이미지 파일 형식 오류: {str(e)}",
+                    "confidence": 0
+                })
+                continue
+            
             image_array = np.array(image)
-            
             result = analyze_image(image_array)
-            
-            # save_result 호출 시 NumPy 오류 방지를 위해 jsonable_encoder로 한 번 필터링 (안전 강화)
-            clean_result = jsonable_encoder(result) 
             
             saved_result = save_result(
                 filename=file.filename,
-                status=clean_result["status"],
-                reason=clean_result.get("reason"),
-                confidence=clean_result.get("confidence", 0),
-                details=clean_result.get("details", {})
+                status=result["status"],
+                reason=result.get("reason"),
+                confidence=result.get("confidence", 0),
+                details=result.get("details", {})
             )
             
             results.append({
                 "id": saved_result["id"],
                 "filename": file.filename,
-                "status": clean_result["status"],
-                "reason": clean_result.get("reason"),
-                "confidence": clean_result.get("confidence", 0),
-                "details": clean_result.get("details", {}),
+                "status": result["status"],
+                "reason": result.get("reason"),
+                "confidence": result.get("confidence", 0),
+                "details": result.get("details", {}),
                 "timestamp": saved_result["timestamp"]
             })
         
         except Exception as e:
-            # 🚨 [최종 수정]: 오류 메시지 때문에 JSON 충돌이 재발하는 것을 막기 위해 repr(e) 사용
-            error_details = repr(e) 
-            
             results.append({
                 "filename": file.filename,
                 "status": "ERROR",
-                # 안전한 문자열 포맷 사용
-                "reason": f"처리 실패: {error_details}", 
+                "reason": f"처리 실패: {str(e)}",
                 "confidence": 0
             })
     
-    # 🚨 jsonable_encoder 적용
-    return JSONResponse(content={"results": jsonable_encoder(results)})
+    return JSONResponse(content={"results": results})
 
 
 @app.post("/api/analyze-frame")
 async def analyze_frame_endpoint(file: UploadFile = File(...)):
-    """실시간 카메라 프레임 분석"""
+    """
+    실시간 카메라 프레임 분석
+    """
     try:
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
+        if not contents:
+            raise HTTPException(status_code=400, detail="빈 파일입니다.")
+        
+        try:
+            image = Image.open(io.BytesIO(contents))
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"이미지 파일 형식 오류: {str(e)}")
+        
         image_array = np.array(image)
         
         result = analyze_frame(image_array)
         
-        # 🚨 jsonable_encoder 적용
-        return JSONResponse(content=jsonable_encoder({
+        # 실시간 분석은 저장하지 않거나 별도 처리
+        return JSONResponse(content={
             "status": result["status"],
             "reason": result.get("reason"),
             "confidence": result.get("confidence", 0),
             "details": result.get("details", {})
-        }))
+        })
     
+    except HTTPException:
+        raise
     except Exception as e:
-        # 오류 발생 시에도 안전한 JSON을 반환하도록 jsonable_encoder 적용
-        error_details = repr(e)
-        raise HTTPException(status_code=500, detail=jsonable_encoder(f"분석 중 오류 발생: {error_details}"))
+        import traceback
+        error_detail = f"프레임 분석 중 오류 발생: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # 서버 로그에 출력
+        raise HTTPException(status_code=500, detail=f"프레임 분석 중 오류 발생: {str(e)}")
+
+
+@app.get("/api/report")
+async def get_report_endpoint(
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    분석 결과를 CSV 리포트로 다운로드
+    """
+    results = get_results(
+        status=status, 
+        start_date=start_date, 
+        end_date=end_date,
+        limit=10000  # 리포트는 많은 데이터를 포함할 수 있도록 limit를 크게 설정
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # CSV 헤더 작성
+    header = [
+        "ID", "Filename", "Timestamp", "Status", "Reason", "Confidence", 
+        "OCR Language", "OCR Status", "YOLO Status", "CNN Status"
+    ]
+    writer.writerow(header)
+
+    # CSV 데이터 행 작성
+    for result in results:
+        details = result.get("details", {})
+        row = [
+            result.get("id"),
+            result.get("filename"),
+            result.get("timestamp"),
+            result.get("status"),
+            result.get("reason"),
+            result.get("confidence"),
+            details.get("ocr_lang"),
+            details.get("ocr_status"),
+            details.get("yolo_status"),
+            details.get("cnn_status")
+        ]
+        writer.writerow(row)
+
+    output.seek(0)
+    
+    report_filename = f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={report_filename}"}
+    )
 
 
 @app.get("/api/statistics")
@@ -185,13 +274,13 @@ async def get_statistics_endpoint(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ):
-    """분석 결과 통계 조회 (DB read)"""
+    """
+    분석 결과 통계 조회
+    """
     try:
         stats = get_statistics(start_date, end_date)
-        # 🚨 jsonable_encoder 적용
-        return JSONResponse(content=jsonable_encoder(stats))
+        return JSONResponse(content=stats)
     except Exception as e:
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"통계 조회 중 오류 발생: {str(e)}")
 
 
@@ -201,13 +290,13 @@ async def get_results_endpoint(
     limit: int = 100,
     offset: int = 0
 ):
-    """분석 결과 목록 조회 (DB read)"""
+    """
+    분석 결과 목록 조회
+    """
     try:
         results = get_results(status=status, limit=limit, offset=offset)
-        # 🚨 jsonable_encoder 적용
-        return JSONResponse(content={"results": jsonable_encoder(results)})
+        return JSONResponse(content={"results": results})
     except Exception as e:
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"결과 조회 중 오류 발생: {str(e)}")
 
 
@@ -217,7 +306,6 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
-# --- 5. 서버 실행 ---
 if __name__ == "__main__":
-    print("FastAPI 서버 시작: http://localhost:5000")
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

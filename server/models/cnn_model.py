@@ -54,8 +54,16 @@ class CNNModel:
         self.model_path = model_path
         self.num_classes = num_classes
         self.model = None
+        # Pillow 10.0.0 이상에서 Image.ANTIALIAS는 Image.Resampling.LANCZOS로 변경됨
+        try:
+            # 최신 Pillow 버전
+            resampling = Image.Resampling.LANCZOS
+        except AttributeError:
+            # 구버전 Pillow 호환 (Pillow < 10.0.0)
+            resampling = Image.LANCZOS
+        
         self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize((224, 224), interpolation=resampling),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5], std=[0.5])
         ])
