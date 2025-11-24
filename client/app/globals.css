@@ -10,7 +10,7 @@
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.4 0.2 260);        /* Primary: 파란색 계열 */
+  --primary: oklch(0.5 0.2 260);        /* Primary: 파란색 계열 */
   --primary-foreground: oklch(0.98 0 0); 
   --secondary: oklch(0.9 0 0);          /* Secondary: 밝은 회색 */
   --secondary-foreground: var(--foreground);
@@ -36,30 +36,35 @@
   --sidebar-ring: var(--ring);
 }
 
-.dark { /* 🚨 Dark Mode - L=0.15 근처 사용 */
-  --background: oklch(0.15 0.05 240);         /* 배경: 어두운 회색 */
-  --foreground: oklch(0.98 0 0);          /* 전경(텍스트): 매우 밝게 */
-  --card: oklch(0.2 0 0);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.2 0 0);
+.dark {
+  --background: oklch(0.18 0.03 260);    /* 배경: 어두운 남색 (slate-950/900 근사치) */
+  --foreground: oklch(0.98 0 0);         /* 전경(텍스트): 매우 밝게 (text-white) */
+  --card: oklch(0.18 0.03 260);          /* 카드 배경: TopBar/Chart 배경 (slate-800 근사치) */
+  --card-foreground: oklch(0.98 0 0);  /* 카드 텍스트: 밝게 */
+  
+  --popover: var(--card);                /* 팝오버 배경: 카드 배경과 동일 */
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.6 0.2 260);          /* Primary: 밝은 파란색 */
-  --primary-foreground: oklch(0.15 0 0);
+  
+  --primary: oklch(0.6 0.2 260);         /* Primary: 밝은 파란색 (blue-600 근사치) */
+  --primary-foreground: oklch(0.15 0 0); /* Primary 텍스트: 어둡게 */
+  
   --secondary: oklch(0.3 0 0);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.25 0 0);
-  --muted-foreground: oklch(0.65 0 0);
+  
+  --muted: oklch(0.25 0 0);              /* Muted: 어두운 회색 */
+  --muted-foreground: oklch(0.98 0 0);   /* Muted 텍스트: 중간 밝기 (text-slate-400 근사치) */
+  
   --accent: oklch(0.25 0 0);
-  --accent-foreground: var(--foreground);
+  --accent-foreground: oklch(0.98 0 0);
+  
   --destructive: oklch(0.6 0.245 27.325);
   --destructive-foreground: oklch(0.15 0 0);
-  --border: oklch(0.3 0 0);
+
+  --border: oklch(0.3 0 0);              /* 테두리: 어두운 회색 (slate-700 근사치) */
   --input: oklch(0.25 0 0);
   --ring: oklch(0.6 0.2 260);
-
-  /* 🚨 Sidebar: 다크 모드에서도 남색을 유지하며 다른 영역과 구분되도록 설정 */
-  --sidebar: oklch(0.15 0.05 240);
-  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar: oklch(0.18 0.03 260);       /* 사이드바 배경: 짙은 남색 */
+  --sidebar-foreground: oklch(0.95 0 0); /* 사이드바 텍스트: 밝게 */
   --sidebar-primary: oklch(0.6 0.2 260);
   --sidebar-primary-foreground: oklch(0.15 0 0);
   --sidebar-accent: oklch(0.25 0 0);
