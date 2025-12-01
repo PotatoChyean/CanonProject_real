@@ -1,7 +1,0 @@
-0000000000000000000000000000000000000000 787c47eba55b7eb25032f89526f37edaa679bdcf PotatoChyean <chyean23@gmail.com> 1763357420 +0900	branch: Created from main
-787c47eba55b7eb25032f89526f37edaa679bdcf ef7e17f7d45acc1ed645fcf36c80c774bbee5f74 PotatoChyean <chyean23@gmail.com> 1763357862 +0900	commit: YEAH
-ef7e17f7d45acc1ed645fcf36c80c774bbee5f74 e723204d9d7e09cbe66abde0c211cbb768101813 PotatoChyean <chyean23@gmail.com> 1763358605 +0900	commit: client 디렉토리 서브모듈 추적 해제
-e723204d9d7e09cbe66abde0c211cbb768101813 ae19ed5fd334bc6bc7ea3cc9c6e64f7eb396a602 PotatoChyean <chyean23@gmail.com> 1763358612 +0900	commit: client 디렉토리의 모든 내용 추가
-ae19ed5fd334bc6bc7ea3cc9c6e64f7eb396a602 e723204d9d7e09cbe66abde0c211cbb768101813 PotatoChyean <chyean23@gmail.com> 1763358659 +0900	reset: moving to HEAD~1
-e723204d9d7e09cbe66abde0c211cbb768101813 d3d600da8d8f9fc67a61840e0abdedbfac09764f PotatoChyean <chyean23@gmail.com> 1763358732 +0900	commit: client 디렉토리의 모든 파일 내용 추가 (최종 성공)
-d3d600da8d8f9fc67a61840e0abdedbfac09764f 4fa3acbc1be769c1f49c2967c56e35f8e16b11ff PotatoChyean <chyean23@gmail.com> 1763358950 +0900	commit (amend): client 디렉토리의 모든 파일 내용 추가 (최종 성공)

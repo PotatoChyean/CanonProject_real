@@ -3,6 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*TODO: 이미지 입력 및 실시간 탐지 부분 색 이상한거 고쳐야 함*/
 :root { /* 🚨 Light Mode (화이트 모드) - L=1.00 근처 사용 */
   --background: oklch(1 0 0);           /* 배경: 순수 흰색 */
   --foreground: oklch(0.145 0 0);       /* 전경(텍스트): 매우 어둡게 */
@@ -37,9 +38,9 @@
 }
 
 .dark {
-  --background: oklch(0.18 0.03 260);    /* 배경: 어두운 남색 (slate-950/900 근사치) */
+  --background: oklch(0.18 0.05 260);    /* 배경: 어두운 남색 (slate-950/900 근사치) */
   --foreground: oklch(0.98 0 0);         /* 전경(텍스트): 매우 밝게 (text-white) */
-  --card: oklch(0.18 0.03 260);          /* 카드 배경: TopBar/Chart 배경 (slate-800 근사치) */
+  --card: oklch(0.18 0.05 260);          /* 카드 배경: TopBar/Chart 배경 (slate-800 근사치) */
   --card-foreground: oklch(0.98 0 0);  /* 카드 텍스트: 밝게 */
   
   --popover: var(--card);                /* 팝오버 배경: 카드 배경과 동일 */
@@ -51,24 +52,24 @@
   --secondary: oklch(0.3 0 0);
   --secondary-foreground: var(--foreground);
   
-  --muted: oklch(0.25 0 0);              /* Muted: 어두운 회색 */
+  --muted: oklch(0.15 0.2 260);              /* Muted: 어두운 파란색 */
   --muted-foreground: oklch(0.98 0 0);   /* Muted 텍스트: 중간 밝기 (text-slate-400 근사치) */
   
   --accent: oklch(0.25 0 0);
   --accent-foreground: oklch(0.98 0 0);
   
   --destructive: oklch(0.6 0.245 27.325);
-  --destructive-foreground: oklch(0.15 0 0);
+  --destructive-foreground: oklch(0.98 0 0);
 
   --border: oklch(0.3 0 0);              /* 테두리: 어두운 회색 (slate-700 근사치) */
   --input: oklch(0.25 0 0);
   --ring: oklch(0.6 0.2 260);
-  --sidebar: oklch(0.18 0.03 260);       /* 사이드바 배경: 짙은 남색 */
+  --sidebar: oklch(0.18 0.05 260);       /* 사이드바 배경: 짙은 남색 */
   --sidebar-foreground: oklch(0.95 0 0); /* 사이드바 텍스트: 밝게 */
   --sidebar-primary: oklch(0.6 0.2 260);
-  --sidebar-primary-foreground: oklch(0.15 0 0);
+  --sidebar-primary-foreground: oklch(0.95 0 0);
   --sidebar-accent: oklch(0.25 0 0);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
   --sidebar-border: oklch(0.3 0 0);
   --sidebar-ring: oklch(0.6 0.2 260);
 }

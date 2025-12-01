@@ -38,7 +38,7 @@ export function SummaryAnalytics({ results }: any) {
         { name: "Pass", value: passCount, fill: "#34d399" }, // 고정 초록 (emerald-400)
         { name: "Fail", value: failCount, fill: "#f87171" }, // 고정 빨강 (red-400)
     ]
-
+// TODO: 분석 바 데이터 - 월별 통계로 뜨도록 수정 필요
     const barData = [
         { name: "Jan", pass: 45, fail: 12 },
         { name: "Feb", pass: 52, fail: 18 },

@@ -20,4 +20,4 @@ server/models/
 # 3. IDE 및 기타 임시 파일
 # -------------------------------------
 .vscode/
-__pycache__/
+__pycache__/s

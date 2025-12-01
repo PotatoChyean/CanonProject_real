@@ -60,13 +60,15 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             {/* 3. 로고 영역: 접혔을 때 텍스트 숨김 */}
             <div className="mb-8 overflow-hidden">
                 <div className="flex items-center gap-3 mb-2 justify-start">
+                    {/* 하드코딩된 blue-500/cyan-400 유지 */}
                     <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center flex-shrink-0">
                         {/* 아이콘이 원래 있었다면 여기에 배치 */}
                     </div>
-                    {/* isCollapsed가 false일 때만 텍스트를 보여줍니다. */}
-                    {!isCollapsed && <h1 className="text-xl font-bold text-white whitespace-nowrap">5조</h1>}
+                    {/* 🚨 [수정]: text-gray-500 -> text-foreground 변수로 변경 */}
+                    {!isCollapsed && <h1 className="text-xl font-bold text-foreground whitespace-nowrap">5조</h1>}
                 </div>
-                {!isCollapsed && <p className="text-sm text-slate-400 whitespace-nowrap">실시간 오류 감지 시스템</p>}
+                {/* 🚨 [수정]: text-slate-400 -> text-muted-foreground 변수로 변경 */}
+                {!isCollapsed && <p className="text-sm text-muted-foreground whitespace-nowrap">실시간 오류 감지 시스템</p>}
             </div>
 
             {/* 4. NavItem에 isCollapsed 상태 전달 */}
@@ -78,7 +80,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             {/* 5. 하단 Status 영역: isCollapsed가 false일 때만 보여줍니다. */}
             {!isCollapsed && (
                 <div className="pt-4 border-t border-sidebar-border">
-                    <p className="text-xs text-slate-500 mb-4">Status</p>
+                    <p className="text-xs text-muted-foreground mb-4">Status</p>
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>

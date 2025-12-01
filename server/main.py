@@ -20,8 +20,6 @@ from database.db import save_result, get_statistics, get_results
 
 import os
 # PyTorch DLL 경로 (사용자님 경로에 맞게 수정 필요)
-torch_dll_path = r"C:\Users\user\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\torch\lib"
-
 app = FastAPI(title="Cannon Project API", version="1.0.0")
 
 analysis_progress = {
@@ -53,20 +51,17 @@ async def startup_event():
     # 모델 경로 설정 (Flask 코드와 동일한 구조)
     yolo_path = os.path.join(BASE_DIR, "models", "yolov8m.pt")
     cnn_path = os.path.join(BASE_DIR, "models", "cnn_4class_conditional.pt")
-    ocr_csv_path = os.path.join(BASE_DIR, "models", "OCR_lang.csv")
-    
+
     # 경로가 없으면 상대 경로로 시도
     if not os.path.exists(yolo_path):
         yolo_path = "models/yolov8m.pt"
     if not os.path.exists(cnn_path):
         cnn_path = "models/cnn_4class_conditional.pt"
-    if not os.path.exists(ocr_csv_path):
-        ocr_csv_path = "models/OCR_lang.csv"
+
     
     initialize_models(
         yolo_path=yolo_path,
-        cnn_path=cnn_path,
-        ocr_csv_path=ocr_csv_path
+        cnn_path=cnn_path
     )
     print("모델 초기화 완료")
 
