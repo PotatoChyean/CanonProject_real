@@ -13,13 +13,13 @@ import numpy as np
 from PIL import Image
 import io
 import csv
-
+import asyncio
 from models.inference import analyze_image, analyze_frame, initialize_models
 import os
 from database.db import save_result, get_statistics, get_results
 
 import os
-# PyTorch DLL 경로 (사용자님 경로에 맞게 수정 필요)
+
 app = FastAPI(title="Cannon Project API", version="1.0.0")
 
 analysis_progress = {
