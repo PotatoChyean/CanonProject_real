@@ -39,6 +39,7 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
 
     // 프레임 캡처
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const imageUrl = canvas.toDataURL("image/jpeg")
 
     // 이미지로 변환하여 API 호출
     canvas.toBlob(async (blob) => {
@@ -59,7 +60,18 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
 
         const result = await response.json()
         // 실시간 결과를 results에 추가할 수 있음
-        // setResults((prev: any[]) => [...prev, { ...result, name: `Frame ${frameCount}` }])
+        const uniqueId = `${Date.now()}-${frameCount}`; // 👈 이 부분을 result.id로 사용
+        const analyzedImageUrl = result.analyzed_image_base64; // 👈 이 줄이 누락되었거나 'result.'가 빠졌을 수 있습니다.
+        setResults((prev: any[]) => [
+          {
+            id: uniqueId,
+            ...result,
+            name: `Frame ${frameCount}`,
+            imageUrl: analyzedImageUrl,
+            timestamp: new Date().toLocaleTimeString(),
+          },
+          ...prev, // 최신 프레임이 위로 오도록 배열에 추가
+        ])
       } catch (error: any) {
         console.error("프레임 분석 오류:", error)
         // 네트워크 오류인 경우 사용자에게 알림
@@ -90,7 +102,7 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
       setError(null)
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3초 타임아웃
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 3초 타임아웃
         
         const healthCheck = await fetch("http://localhost:5000/health", {
           method: "GET",
@@ -189,7 +201,7 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
                       </div>
                   )}
                   {isRunning && (
-                      <div className="absolute top-4 left-4 bg-black/50 px-3 py-1 rounded text-foreground text-sm">
+                      <div className="absolute top-4 left-4 bg-black/50 px-3 py-1 rounded text-white text-sm">
                           Frame: {frameCount}
                       </div>
                   )}

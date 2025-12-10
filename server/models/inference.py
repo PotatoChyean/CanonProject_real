@@ -6,8 +6,8 @@ YOLO, ConditionalViT (CNN) 모델을 연결하여 7단계 규칙 기반 Pass/Fai
 import numpy as np
 import torch
 import time 
-from typing import Dict, List, Optional
-from PIL import Image
+from typing import Dict, List, Optional, Tuple # 👈 Tuple 임포트 추가
+from PIL import Image, ImageDraw
 from collections import Counter
 from ultralytics import YOLO
 from torchvision import transforms
@@ -136,7 +136,7 @@ def initialize_models(
 # ============================================================
 # 이미지 분석 메인 함수 (최종 수정: 버튼 상태 독립성 강화)
 # ============================================================
-def analyze_image(image: np.ndarray) -> Dict:
+def analyze_image(image: np.ndarray) -> Tuple[Dict, Image.Image]:
     """
     이미지 분석 메인 함수: 7단계 복합 검사 파이프라인 수행 및 결과 구조 변경 반영
     """
@@ -151,6 +151,9 @@ def analyze_image(image: np.ndarray) -> Dict:
             pil_img = Image.fromarray(image).convert("RGB")
         else:
             pil_img = Image.fromarray(image).convert("RGB") 
+
+        processed_image = pil_img.copy() # 👈 처리할 이미지 복사
+        draw = ImageDraw.Draw(processed_image) # 👈 이미지 드로잉 객체 생성
 
         # 1. YOLO 객체 검출
         start_time_yolo = time.time()
@@ -332,7 +335,7 @@ def analyze_image(image: np.ndarray) -> Dict:
                 "detected_classes": detected_classes_raw
             }
         }
-        return convert_numpy_types(final_result)
+        return convert_numpy_types(final_result), processed_image
         
     except Exception as e:
         traceback.print_exc()
@@ -342,10 +345,10 @@ def analyze_image(image: np.ndarray) -> Dict:
             "confidence": 0,
             "details": {}
         }
-        return convert_numpy_types(error_result)
+        return convert_numpy_types(error_result), Image.fromarray(image).convert("RGB")
 
 
-def analyze_frame(image: np.ndarray) -> Dict:
+def analyze_frame(image: np.ndarray) -> Tuple[Dict, Image.Image]:
     """
     실시간 프레임 분석 (analyze_image와 동일)
     """
