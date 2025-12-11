@@ -3,6 +3,18 @@
 import { CheckCircle, AlertCircle } from "lucide-react"
 import { useState } from "react"
 
+interface AnalysisResult {
+    id: string;
+    name: string; // 파일 업로드 시의 filename
+    status: string;
+    reason?: string;
+    confidence: number;
+    details: any;
+    file?: File; // 파일 업로드 시에만 존재
+    // 💡 [추가] Live Camera/Frame 분석 시 백엔드에서 Base64로 받은 이미지 데이터
+    processed_image_b64?: string; 
+}
+
 export function ResultsGrid({ results }: any) {
     // ✅ [수정] 1. 훅 호출 위치 수정: 컴포넌트 본문 내부로 이동 (Hook Rules 준수)
     // LiveCamera에서 넘어오는 결과를 처리하기 위해 File 대신 결과 객체를 저장합니다.
@@ -54,9 +66,11 @@ export function ResultsGrid({ results }: any) {
                 {results.map((result: any) => {
 
                     // 🚨 [추가] 이미지 소스 결정
-                    const imageSource = result.imageUrl
-                        ? result.imageUrl // LiveCamera (Base64 URL)
-                        : (result.file ? getBlobURL(result.file) : null); // File Upload (Blob URL)
+                    const imageSource = result.processed_image_b64
+                        ? `data:image/jpeg;base64,${result.processed_image_b64}` // 💡 Base64 데이터 URL 형식으로 변환
+                        : result.imageUrl // LiveCamera에서 넘어온 File-based URL (기존 로직)
+                            ? result.imageUrl
+                            : (result.file ? getBlobURL(result.file) : null); // File Upload (Blob URL)
 
                     return (
                         <div
@@ -144,8 +158,16 @@ export function ResultsGrid({ results }: any) {
                 >
                     <div className="relative max-w-4xl max-h-[90vh]">
                         <img
-                            // 🚨 [수정 5] 모달 이미지 소스
-                            src={selectedImageResult.imageUrl ? selectedImageResult.imageUrl : getBlobURL(selectedImageResult.file)}
+                            // 🚨 [수정 5] 모달 이미지 소스, Base64 처리 추가
+
+                            src={
+                                selectedImageResult.processed_image_b64
+                                    ? `data:image/jpeg;base64,${selectedImageResult.processed_image_b64}`
+                                    : selectedImageResult.imageUrl
+                                        ? selectedImageResult.imageUrl
+                                        : getBlobURL(selectedImageResult.file)
+                            }
+
                             alt="확대 이미지"
                             className="max-w-full max-h-[90vh] object-contain rounded-lg"
                             // Blob URL만 revokeObjectURL 호출
