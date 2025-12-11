@@ -189,8 +189,8 @@ async def analyze_batch_endpoint(files: List[UploadFile] = File(...)):
                 continue
             
             image_array = np.array(image)
-            result = analyze_image(image_array)
-            
+            result, _ = analyze_image(image_array)
+
             saved_result = save_result(
                 filename=file.filename,
                 status=result["status"],
@@ -198,7 +198,6 @@ async def analyze_batch_endpoint(files: List[UploadFile] = File(...)):
                 confidence=result.get("confidence", 0),
                 details=result.get("details", {})
             )
-            
             results.append({
                 "id": saved_result["id"],
                 "filename": file.filename,
@@ -238,8 +237,8 @@ async def analyze_frame_endpoint(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"이미지 파일 형식 오류: {str(e)}")
         
         image_array = np.array(image)
-        
-        result = analyze_frame(image_array)
+
+        result, _ = analyze_frame(image_array)
         
         # 실시간 분석은 저장하지 않거나 별도 처리
         return JSONResponse(content={

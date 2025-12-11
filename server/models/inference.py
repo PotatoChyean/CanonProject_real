@@ -18,8 +18,8 @@ import traceback
 
 # 외부 모듈 임포트 (가정)
 # 🚨 이 임포트가 실제 YOLO와 CNN 모델 클래스를 포함하는 파일입니다.
-from models.yolo_model import YOLOModel 
-from models.cnn_model import CNNModel
+from .yolo_model import YOLOModel 
+from .cnn_model import CNNModel
 from .cnn_model import ConditionalViT
 
 # ============================================================
