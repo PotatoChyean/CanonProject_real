@@ -1,3 +1,36 @@
+# 💻 웹 서비스 프레임워크
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6  # 파일 업로드 지원
+
+# ⚙️ 핵심 데이터 처리 및 기본 유틸리티
+# easyocr, ultralytics 등의 필수 종속성 포함
+numpy==1.24.3 
+pandas==2.0.3 
+pillow==11.1.0  # conda list에 있는 버전으로 통일 (혹은 10.4.0 등으로 최신화 고려)
+# typing-extensions는 pydantic의 종속성이므로 생략
+
+# 🖼️ 이미지/비디오 처리
+opencv-python==4.8.1.78
+# scikit-image, tifffile 등은 opencv나 pillow의 간접 종속성이므로 생략
+
+# 🤖 딥러닝/ML 백엔드 (CPU Only 환경으로 보임)
+# pytorch, torchaudio, torchvision의 버전은 현재 conda list 버전을 따르는 것이 안정적입니다.
+torch==2.5.1+cpu 
+torchaudio==2.5.1+cpu 
+torchvision==0.20.1+cpu 
+
+# 🎯 YOLO 모델
+ultralytics==8.3.228
+
+# 📜 OCR 모델 (EasyOCR)
+easyocr==1.7.2
+
+# 기타 유틸리티 (필요하다면 추가, 꼭 필요한 건 아니여서 충돌나면 뺴셔도 될 듯)
+python-dotenv  # 환경 변수 관리 (요구사항에 있었으므로 추가)
+tqdm           # 진행률 표시줄
+
+
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
