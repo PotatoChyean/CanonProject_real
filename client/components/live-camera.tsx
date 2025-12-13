@@ -11,7 +11,7 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
     const [frameCount, setFrameCount] = useState(0)
     const [isStreamReady, setIsStreamReady] = useState(false)
     
-    // 💡 [통합/복원] 명도(brightness, 0~100) 및 조도/대비(exposure, 0.5~2.0) 상태 복원
+    // 💡 [통합/복원] 명도(brightness, 0~100) 및 조도/대비(exposure, 0~2.0) 상태 복원
     const BRIGHTNESS_MAX = 50; // 이전 코드의 기준값
     const EXPOSURE_MAX = 2.0; 
     
@@ -330,7 +330,7 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
                     </label>
                     <input
                         type="range"
-                        min={0.5} 
+                        min={0} 
                         max={EXPOSURE_MAX}
                         step={0.1}
                         value={exposure}
@@ -339,7 +339,7 @@ export function LiveCamera({ setIsProcessing, setResults }: any) {
                         disabled={isRunning || !streamRef.current}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>최저 ({0.5})</span>
+                        <span>최저 ({0})</span>
                         <span>기본 (1.0)</span>
                         <span> ({EXPOSURE_MAX})</span>
                     </div>
